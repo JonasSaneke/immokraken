@@ -23,6 +23,16 @@ def get_match_num(soup):
     match_num = math.ceil(int(match_num)/20)
     
     return match_num
+    
+def extract_city(address):
+    parts = address.split(',')
+    if len(parts) > 1:
+        city = re.search(r"((?<=,\s).*(?=\s\())" ,address).group()
+    
+    else:
+        city = re.search(r"(.*(?=\s\())" ,address).group()
+        
+    return city
 
 def clean_listings_df(df):
 
@@ -48,10 +58,12 @@ def clean_listings_df(df):
     separator = ', '
     
     if 'address' in cols:
-        df['city'] = df['address'].apply(lambda x: x.split(separator, 1)[1] if separator in x else x)
         df['street'] = df['address'].apply(lambda x: x.split(separator, 1)[0] if separator in x else np.NaN)
         df['district'] = df['address'].str.extract(r'\((.*?)\)', expand=True)
-        df['city'] = 'Berlin'
+        
+        df['city'] = df['address'].apply(extract_city)
+        most_common_city = df['city'].value_counts().idxmax()
+        df['city'] = most_common_city
     
     df['created_at'] = pd.to_datetime(pd.Timestamp.now().strftime('%Y-%m-%d %H:%M'))
     
@@ -74,6 +86,7 @@ def main():
     details_list = []
     bullets_list = []
     descriptions_list = []
+    sightings_list = []
     
     control_df = pd.read_sql('Select distinct identifier from immokraken.listings', con=engine)
     
@@ -99,11 +112,15 @@ def main():
                 details_row = {}
                 bullets_row = {}
                 descriptions_row = {}
+                sightings_row = {}
                 
                 # get expose link
                 link = listing.find("a", href=True)['href']
                 print(link)
                 identifier = re.search("(?<=expose/).*" , link)[0]
+                
+                sightings_row["identifier"] = identifier
+                sightings_list.append(sightings_row)
                 
                 if identifier in control_df['identifier'].values:
                     continue
@@ -220,6 +237,9 @@ def main():
     listings_df = pd.DataFrame(listings_list)
     listings_df_clean = clean_listings_df(listings_df)
     
+    sightings_df = pd.DataFrame(sightings_list)
+    sightings_df_clean = clean_listings_df(sightings_df)
+    
     details_df = pd.DataFrame(details_list)
     bullets_df = pd.DataFrame(bullets_list)
     descriptions_df = pd.DataFrame(descriptions_list)
@@ -239,6 +259,7 @@ def main():
     # descriptions_df.to_csv(os.path.join(directory,'descriptions.csv'), sep='|')
     
     listings_df_clean.to_sql(name='listings', con=engine, if_exists='append', index=False)
+    sightings_df_clean.to_sql(name='sightings', con=engine, if_exists='append', index=False)
     details_df.to_sql(name='details', con=engine, if_exists='append', index=False)
     bullets_df.to_sql(name='bullets', con=engine, if_exists='append', index=False)
     descriptions_df.to_sql(name='descriptions', con=engine, if_exists='append', index=False)

@@ -1,3 +1,5 @@
 immokraken_sql.py
 immokraken_test.py
 /data/
+.ipynb_checkpoints
+*.ipynb
